@@ -5,6 +5,56 @@ import { format, differenceInMinutes } from "date-fns";
 import Papa from "papaparse";
 import "./App.css";
 
+function generateTestCSV() {
+  const now = new Date();
+  const hours = now.getHours();
+  const minutes = now.getMinutes();
+
+  // Generate times starting from current time + 1 minute
+  const trains = [
+    { number: "22001", priority: "P1", stay: 1 },
+    { number: "22002", priority: "P2", stay: 1 },
+    { number: "22003", priority: "P1", stay: 1 },
+    { number: "22004", priority: "P3", stay: 2 },
+    { number: "22005", priority: "P2", stay: 1 },
+    { number: "22006", priority: "P1", stay: 1 },
+    { number: "22007", priority: "P3", stay: 1 },
+    { number: "22008", priority: "P2", stay: 1 },
+    { number: "22009", priority: "P1", stay: 1 },
+    { number: "22010", priority: "P3", stay: 10 },
+  ];
+
+  let csv = "Train Number,Arrival Time,Departure Time,Priority\n";
+
+  trains.forEach((train, index) => {
+    const arrivalMin = minutes + index + 1;
+    const arrivalHour = hours + Math.floor(arrivalMin / 60);
+    const depMin = arrivalMin + train.stay;
+    const depHour = arrivalHour + Math.floor(depMin / 60);
+
+    const arrivalTime = `${String(arrivalHour % 24).padStart(2, "0")}:${String(arrivalMin % 60).padStart(2, "0")}`;
+    const departureTime = `${String(depHour % 24).padStart(2, "0")}:${String(depMin % 60).padStart(2, "0")}`;
+
+    csv += `${train.number},${arrivalTime},${departureTime},${train.priority}\n`;
+  });
+
+  return csv;
+}
+
+// To download the CSV file
+function downloadCSV() {
+  const csv = generateTestCSV();
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.setAttribute("hidden", "");
+  a.setAttribute("href", url);
+  a.setAttribute("download", "train_schedule.csv");
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
 function App() {
   const [platformCount, setPlatformCount] = useState(2);
   const [platforms, setPlatforms] = useState(Array(2).fill(null));
@@ -137,55 +187,6 @@ function App() {
     return () => clearInterval(interval);
   }, [platforms, schedule, waitingTrains, reports]);
 
-  function generateTestCSV() {
-    const now = new Date();
-    const hours = now.getHours();
-    const minutes = now.getMinutes();
-
-    // Generate times starting from current time + 1 minute
-    const trains = [
-      { number: "22001", priority: "P1", stay: 1 },
-      { number: "22002", priority: "P2", stay: 1 },
-      { number: "22003", priority: "P1", stay: 1 },
-      { number: "22004", priority: "P3", stay: 2 },
-      { number: "22005", priority: "P2", stay: 1 },
-      { number: "22006", priority: "P1", stay: 1 },
-      { number: "22007", priority: "P3", stay: 1 },
-      { number: "22008", priority: "P2", stay: 1 },
-      { number: "22009", priority: "P1", stay: 1 },
-      { number: "22010", priority: "P3", stay: 10 },
-    ];
-
-    let csv = "Train Number,Arrival Time,Departure Time,Priority\n";
-
-    trains.forEach((train, index) => {
-      const arrivalMin = minutes + index + 1;
-      const arrivalHour = hours + Math.floor(arrivalMin / 60);
-      const depMin = arrivalMin + train.stay;
-      const depHour = arrivalHour + Math.floor(depMin / 60);
-
-      const arrivalTime = `${String(arrivalHour % 24).padStart(2, "0")}:${String(arrivalMin % 60).padStart(2, "0")}`;
-      const departureTime = `${String(depHour % 24).padStart(2, "0")}:${String(depMin % 60).padStart(2, "0")}`;
-
-      csv += `${train.number},${arrivalTime},${departureTime},${train.priority}\n`;
-    });
-
-    return csv;
-  }
-
-  // To download the CSV file
-  function downloadCSV() {
-    const csv = generateTestCSV();
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.setAttribute("hidden", "");
-    a.setAttribute("href", url);
-    a.setAttribute("download", "train_schedule.csv");
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  }
   return (
     <div className="app-container">
       <header>
@@ -225,13 +226,11 @@ function App() {
       <main>
         <section className="platform-section">
           <h2>Platform Status</h2>
-          <div className="platforms-grid">
+          <div className="train-track">
             {platforms.map((train, idx) => (
-              <div
-                key={idx}
-                className={`platform ${train ? "occupied" : "empty"}`}
-              >
-                <div className="platform-header">
+              <div key={idx} className="platform-container">
+                {/* Platform Label */}
+                <div className="platform-label">
                   <h3>Platform {idx + 1}</h3>
                   {train && (
                     <span
@@ -242,45 +241,51 @@ function App() {
                   )}
                 </div>
 
+                {/* Train Element */}
                 <AnimatePresence>
                   {train ? (
                     <motion.div
                       key={`train-${train.trainNumber}`}
-                      className="train-info arriving"
-                      initial={{ x: -100, opacity: 0 }}
-                      animate={{ x: 0, opacity: 1 }}
-                      exit={{ x: 100, opacity: 0 }}
-                      transition={{ duration: 0.5 }}
+                      className="train-element"
+                      initial={{ x: -300 }}
+                      animate={{ x: 0 }}
+                      exit={{ x: 300 }}
+                      transition={{ type: "spring", stiffness: 100 }}
                     >
-                      <p className="train-number">{train.trainNumber}</p>
-                      <div className="time-info">
-                        <div>
-                          <span>Arrived:</span>
-                          <span>
+                      <div className="train-head">
+                        <div className="train-number">{train.trainNumber}</div>
+                        <div className="train-priority">{train.priority}</div>
+                      </div>
+
+                      <div className="train-body">
+                        <div className="train-time">
+                          <span className="time-label">Arrived:</span>
+                          <span className="time-value">
                             {format(new Date(train.actualArrival), "HH:mm")}
                           </span>
                         </div>
-                        <div>
-                          <span>Departs:</span>
-                          <span>
-                            {train.departure}
-                            {` (in ${differenceInMinutes(
+                        <div className="train-time">
+                          <span className="time-label">Departs in:</span>
+                          <span className="time-value">
+                            {differenceInMinutes(
                               getTimeInMillis(train.departure),
                               Date.now(),
-                            )} min)`}
+                            )}{" "}
+                            min
                           </span>
                         </div>
                       </div>
+
+                      <div className="train-tail"></div>
                     </motion.div>
                   ) : (
-                    <motion.p
-                      className="empty-platform"
+                    <motion.div
+                      className="empty-track"
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
-                      transition={{ duration: 0.3 }}
                     >
-                      Available
-                    </motion.p>
+                      No train currently
+                    </motion.div>
                   )}
                 </AnimatePresence>
               </div>

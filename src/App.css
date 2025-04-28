@@ -33,6 +33,8 @@ h3 {
   gap: 20px;
   flex-wrap: wrap;
   margin-bottom: 20px;
+  justify-content: flex-end;
+  align-items: center;
 }
 
 .platform-form {
@@ -325,4 +327,135 @@ h3 {
 
 .waiting-list {
   position: relative;
+}
+
+/* Train Track Layout */
+.train-track {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.platform-container {
+  position: relative;
+  height: 100px;
+  background-color: #f0f0f0;
+  border-radius: 8px;
+  padding: 10px;
+  overflow: hidden;
+}
+
+.platform-label {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  z-index: 2;
+}
+
+/* Train Element Styling */
+.train-element {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  left: 120px;
+  display: flex;
+  height: 70px;
+  width: calc(100% - 140px);
+  background: linear-gradient(90deg, #3a7bd5, #00d2ff);
+  border-radius: 6px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+  color: white;
+}
+
+.train-head {
+  width: 80px;
+  background-color: #2c3e50;
+  border-radius: 6px 0 0 6px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 5px;
+}
+
+.train-number {
+  font-size: 1.4rem;
+  font-weight: bold;
+}
+
+.train-priority {
+  font-size: 0.8rem;
+  background: white;
+  color: #2c3e50;
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-top: 5px;
+}
+
+.train-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 30px;
+}
+
+.train-time {
+  display: flex;
+  flex-direction: column;
+}
+
+.time-label {
+  font-size: 0.8rem;
+  opacity: 0.8;
+}
+
+.time-value {
+  font-size: 1.2rem;
+  font-weight: bold;
+}
+
+.train-tail {
+  width: 30px;
+  background-color: #e74c3c;
+  border-radius: 0 6px 6px 0;
+}
+
+/* Empty State */
+.empty-track {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  left: 120px;
+  right: 20px;
+  text-align: center;
+  color: #7f8c8d;
+  font-style: italic;
+}
+
+/* Priority Badges */
+.priority-badge {
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: bold;
+}
+
+.priority-badge.p1 {
+  background-color: #e74c3c;
+  color: white;
+}
+.priority-badge.p2 {
+  background-color: #f39c12;
+  color: white;
+}
+.priority-badge.p3 {
+  background-color: #2ecc71;
+  color: white;
 }

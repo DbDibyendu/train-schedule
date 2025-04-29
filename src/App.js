@@ -1,67 +1,18 @@
-// src/App.js
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { format, differenceInMinutes } from "date-fns";
 import Papa from "papaparse";
 import "./App.css";
-
-function generateTestCSV() {
-  const now = new Date();
-  const hours = now.getHours();
-  const minutes = now.getMinutes();
-
-  // Generate times starting from current time + 1 minute
-  const trains = [
-    { number: "22001", priority: "P1", stay: 1 },
-    { number: "22002", priority: "P2", stay: 1 },
-    { number: "22003", priority: "P1", stay: 1 },
-    { number: "22004", priority: "P3", stay: 2 },
-    { number: "22005", priority: "P2", stay: 1 },
-    { number: "22006", priority: "P1", stay: 1 },
-    { number: "22007", priority: "P3", stay: 1 },
-    { number: "22008", priority: "P2", stay: 1 },
-    { number: "22009", priority: "P1", stay: 1 },
-    { number: "22010", priority: "P3", stay: 10 },
-  ];
-
-  let csv = "Train Number,Arrival Time,Departure Time,Priority\n";
-
-  trains.forEach((train, index) => {
-    const arrivalMin = minutes + index + 1;
-    const arrivalHour = hours + Math.floor(arrivalMin / 60);
-    const depMin = arrivalMin + train.stay;
-    const depHour = arrivalHour + Math.floor(depMin / 60);
-
-    const arrivalTime = `${String(arrivalHour % 24).padStart(2, "0")}:${String(arrivalMin % 60).padStart(2, "0")}`;
-    const departureTime = `${String(depHour % 24).padStart(2, "0")}:${String(depMin % 60).padStart(2, "0")}`;
-
-    csv += `${train.number},${arrivalTime},${departureTime},${train.priority}\n`;
-  });
-
-  return csv;
-}
-
-// To download the CSV file
-function downloadCSV() {
-  const csv = generateTestCSV();
-  const blob = new Blob([csv], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.setAttribute("hidden", "");
-  a.setAttribute("href", url);
-  a.setAttribute("download", "train_schedule.csv");
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-}
+import { downloadCSV } from "./utils.js";
 
 function App() {
-  const [platformCount, setPlatformCount] = useState(2);
-  const [platforms, setPlatforms] = useState(Array(2).fill(null));
+  const [platformCount, setPlatformCount] = useState(null);
+  const [platforms, setPlatforms] = useState([]);
   const [schedule, setSchedule] = useState([]);
   const [waitingTrains, setWaitingTrains] = useState([]);
-  const [reports, setReports] = useState([]);
   const [csvError, setCsvError] = useState("");
+  const [trains, setTrains] = useState([]);
+  const [csvUploaded, setCsvUploaded] = useState(false);
 
   const handlePlatformSubmit = (e) => {
     e.preventDefault();
@@ -80,14 +31,21 @@ function App() {
       header: true,
       skipEmptyLines: true,
       complete: (results) => {
-        const trains = results.data.map((row, index) => ({
-          trainNumber: row["Train Number"],
-          arrival: row["Arrival Time"],
-          departure: row["Departure Time"],
-          priority: row["Priority"],
-          originalOrder: index,
-          status: "scheduled",
-        }));
+        if (!results.data || results.data.length === 0) {
+          setCsvError("CSV file is empty.");
+          return;
+        }
+
+        const trains = results.data
+          .map((row, index) => ({
+            trainNumber: row["Train Number"],
+            arrival: row["Arrival Time"],
+            departure: row["Departure Time"],
+            priority: row["Priority"]?.toLowerCase() || "medium",
+            originalOrder: index,
+            status: "scheduled",
+          }))
+          .filter((train) => train.trainNumber);
 
         trains.sort((a, b) => {
           if (a.priority !== b.priority)
@@ -95,18 +53,11 @@ function App() {
           return a.originalOrder - b.originalOrder;
         });
 
-        // Update reports with all scheduled trains
-        const newReports = trains.map((train) => ({
-          trainNumber: train.trainNumber,
-          priority: train.priority,
-          scheduledArrival: train.arrival,
-          scheduledDeparture: train.departure,
-          status: "scheduled",
-        }));
-
+        console.log("Parsed CSV data:", trains);
         setSchedule(trains);
-        setReports(newReports); // This updates the reports with the new schedule
+        setTrains(trains);
         setCsvError("");
+        setCsvUploaded(true);
       },
       error: () =>
         setCsvError("Invalid CSV format. Please check the file structure."),
@@ -114,7 +65,17 @@ function App() {
   };
 
   const getTimeInMillis = (timeStr) => {
+    if (!timeStr || typeof timeStr !== "string") return 0;
     const [hours, minutes] = timeStr.split(":").map(Number);
+    if (
+      isNaN(hours) ||
+      isNaN(minutes) ||
+      hours < 0 ||
+      hours > 23 ||
+      minutes < 0 ||
+      minutes > 59
+    )
+      return 0;
     const now = new Date();
     return new Date(
       now.getFullYear(),
@@ -129,97 +90,176 @@ function App() {
     const interval = setInterval(() => {
       const now = Date.now();
       const updatedPlatforms = [...platforms];
-      const updatedReports = [...reports];
       const updatedWaiting = [...waitingTrains];
       let updatedSchedule = [...schedule];
 
-      // Check departures
-      updatedPlatforms.forEach((train, index) => {
-        if (train && now >= getTimeInMillis(train.departure)) {
-          updatedReports.push({
-            ...train,
-            actualDeparture: new Date(),
-            status: "departed",
-          });
-          updatedPlatforms[index] = null;
-        }
-      });
+      // arrival Logic
+      // First clear any trains in waiting list
+      if (updatedWaiting.length > 0) {
+        updatedWaiting.forEach((train, index) => {
+          if (getTimeInMillis(train.arrival) <= now) {
+            const freePlatformIndex = updatedPlatforms.findIndex(
+              (p) => p === null,
+            );
+            if (freePlatformIndex !== -1) {
+              const currDate = new Date();
+              const arrivalMillis = getTimeInMillis(train.arrival);
+              const departureMillis = getTimeInMillis(train.departure);
+              if (
+                arrivalMillis &&
+                departureMillis &&
+                departureMillis > arrivalMillis
+              ) {
+                const duration = departureMillis - arrivalMillis;
+                const departureDate = new Date(currDate.getTime() + duration);
 
-      // Check arrivals
-      updatedSchedule = updatedSchedule.filter((train) => {
-        if (getTimeInMillis(train.arrival) <= now) {
-          const freePlatformIndex = updatedPlatforms.findIndex(
-            (p) => p === null,
-          );
-          if (freePlatformIndex !== -1) {
-            updatedPlatforms[freePlatformIndex] = {
-              ...train,
-              actualArrival: new Date(),
-              status: "arrived",
-            };
-            updatedReports.push({
-              ...train,
-              actualArrival: new Date(),
-              status: "arrived",
-            });
-            return false;
-          } else {
-            updatedWaiting.push(train);
-            return false;
+                updatedPlatforms[freePlatformIndex] = {
+                  ...train,
+                  actualArrival: currDate,
+                  actualDeparture: departureDate,
+                  status: "arrived",
+                };
+
+                setTrains((prev) =>
+                  prev.map((t) =>
+                    t.trainNumber === train.trainNumber
+                      ? {
+                          ...t,
+                          actualArrival: currDate,
+                          actualDeparture: departureDate,
+                          status: "arrived",
+                        }
+                      : t,
+                  ),
+                );
+                updatedWaiting.splice(index, 1);
+              }
+            }
           }
-        }
-        return true;
-      });
+        });
+      } else {
+        // If no trains in waiting list, check the schedule
+        updatedSchedule = updatedSchedule.filter((train) => {
+          if (getTimeInMillis(train.arrival) <= now) {
+            const freePlatformIndex = updatedPlatforms.findIndex(
+              (p) => p === null,
+            );
+            if (freePlatformIndex !== -1) {
+              const currDate = new Date();
+              const arrivalMillis = getTimeInMillis(train.arrival);
+              const departureMillis = getTimeInMillis(train.departure);
+              if (
+                arrivalMillis &&
+                departureMillis &&
+                departureMillis > arrivalMillis
+              ) {
+                const duration = departureMillis - arrivalMillis;
+                const departureDate = new Date(currDate.getTime() + duration);
 
-      // Sort waiting trains by priority and original order
+                updatedPlatforms[freePlatformIndex] = {
+                  ...train,
+                  actualArrival: currDate,
+                  actualDeparture: departureDate,
+                  status: "arrived",
+                };
+
+                setTrains((prev) =>
+                  prev.map((t) =>
+                    t.trainNumber === train.trainNumber
+                      ? {
+                          ...t,
+                          actualArrival: currDate,
+                          actualDeparture: departureDate,
+                          status: "arrived",
+                        }
+                      : t,
+                  ),
+                );
+                return false;
+              }
+            } else {
+              updatedWaiting.push(train);
+              return false;
+            }
+          }
+          return true;
+        });
+      }
+
+      // waiting sort logic
       updatedWaiting.sort((a, b) => {
         if (a.priority !== b.priority)
-          return a.priority.localeCompare(b.priority);
+          return a.priority.localeCompare(b.priority); // lexicographical order
         return a.originalOrder - b.originalOrder;
+      });
+
+      // departure logic
+      updatedPlatforms.forEach((train, index) => {
+        const departureTime = train?.actualDeparture
+          ? new Date(train.actualDeparture).getTime()
+          : null;
+        if (departureTime && !isNaN(departureTime) && now >= departureTime) {
+          updatedPlatforms[index] = null;
+          setTrains((prev) =>
+            prev.map((t) =>
+              t.trainNumber === train.trainNumber
+                ? { ...t, status: "departed" }
+                : t,
+            ),
+          );
+        }
       });
 
       setPlatforms(updatedPlatforms);
       setWaitingTrains(updatedWaiting);
       setSchedule(updatedSchedule);
-      setReports(updatedReports);
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [platforms, schedule, waitingTrains, reports]);
+  }, [platforms, schedule, waitingTrains]);
 
+  console.log("schedule", schedule);
   return (
     <div className="app-container">
       <header>
         <h1>Train Station Dashboard</h1>
+        <h5> Refresh Page to upload New Schedule</h5>
         <button onClick={downloadCSV} style={{ margin: "10px" }}>
           Download Test CSV
         </button>
-        <div className="controls">
-          <form onSubmit={handlePlatformSubmit} className="platform-form">
-            <input
-              type="number"
-              name="platforms"
-              min="2"
-              max="20"
-              defaultValue={platformCount}
-              placeholder="Platform count (2-20)"
-              required
-            />
-            <button type="submit">Update Platforms</button>
-          </form>
 
-          <div className="csv-upload">
-            <label>
-              Upload Schedule CSV
-              <input
-                type="file"
-                accept=".csv"
-                onChange={handleCSVUpload}
-                style={{ display: "none" }}
-              />
-            </label>
-            {csvError && <div className="error-message">{csvError}</div>}
-          </div>
+        <div className="controls">
+          {platformCount === null && (
+            <>
+              <p>Please set the number of platforms (2-20).</p>
+              <form onSubmit={handlePlatformSubmit} className="platform-form">
+                <input
+                  type="number"
+                  name="platforms"
+                  min="2"
+                  max="20"
+                  defaultValue={platformCount}
+                  required
+                />
+                <button type="submit">Set Platforms</button>
+              </form>
+            </>
+          )}
+
+          {!csvUploaded && platformCount && (
+            <div className="csv-upload">
+              <label>
+                Upload Schedule CSV
+                <input
+                  type="file"
+                  accept=".csv"
+                  onChange={handleCSVUpload}
+                  style={{ display: "none" }}
+                />
+              </label>
+              {csvError && <div className="error-message">{csvError}</div>}
+            </div>
+          )}
         </div>
       </header>
 
@@ -247,10 +287,13 @@ function App() {
                     <motion.div
                       key={`train-${train.trainNumber}`}
                       className="train-element"
-                      initial={{ x: -300 }}
-                      animate={{ x: 0 }}
-                      exit={{ x: 300 }}
-                      transition={{ type: "spring", stiffness: 100 }}
+                      initial={{ x: -300, opacity: 0 }}
+                      animate={{ x: 0, opacity: 1 }}
+                      exit={{ x: 1000, opacity: 0 }}
+                      transition={{
+                        duration: 2,
+                        ease: "easeInOut",
+                      }}
                     >
                       <div className="train-head">
                         <div className="train-number">{train.trainNumber}</div>
@@ -268,15 +311,13 @@ function App() {
                           <span className="time-label">Departs in:</span>
                           <span className="time-value">
                             {differenceInMinutes(
-                              getTimeInMillis(train.departure),
-                              Date.now(),
-                            )}{" "}
-                            min
+                              new Date(train.actualDeparture),
+                              new Date(),
+                            ) + 1}{" "}
+                            mins
                           </span>
                         </div>
                       </div>
-
-                      <div className="train-tail"></div>
                     </motion.div>
                   ) : (
                     <motion.div
@@ -330,6 +371,7 @@ function App() {
             </AnimatePresence>
           </div>
         </section>
+
         <section className="reports-section">
           <h2>Train Activity Report</h2>
           <div className="report-table-container">
@@ -345,25 +387,28 @@ function App() {
                 </tr>
               </thead>
               <tbody>
-                {reports.length > 0 ? (
-                  reports.map((report, index) => (
-                    <tr key={index} className={report.status}>
-                      <td>{report.trainNumber}</td>
+                {trains.length > 0 ? (
+                  trains.map((train, index) => (
+                    <tr key={index} className={train.status}>
+                      <td>{train.trainNumber}</td>
                       <td
-                        className={`priority ${report.priority.toLowerCase()}`}
+                        className={`priority ${train.priority.toLowerCase()}`}
+                        style={{ paddingLeft: "35px" }}
                       >
-                        {report.priority}
+                        {train.priority}
                       </td>
-                      <td>{report.scheduledArrival}</td>
+                      <td>{train.arrival}</td>
                       <td>
-                        {report.actualArrival
-                          ? format(new Date(report.actualArrival), "HH:mm")
+                        {train.actualArrival &&
+                        !isNaN(new Date(train.actualArrival))
+                          ? format(new Date(train.actualArrival), "HH:mm")
                           : "-"}
                       </td>
-                      <td>{report.scheduledDeparture}</td>
+                      <td>{train.departure}</td>
                       <td>
-                        {report.actualDeparture
-                          ? format(new Date(report.actualDeparture), "HH:mm")
+                        {train.actualDeparture &&
+                        !isNaN(new Date(train.actualDeparture))
+                          ? format(new Date(train.actualDeparture), "HH:mm")
                           : "-"}
                       </td>
                     </tr>

@@ -94,6 +94,7 @@ function App() {
   };
 
   useEffect(() => {
+    // polling at interval of 1 second
     const interval = setInterval(() => {
       const now = Date.now();
       const updatedPlatforms = [...platforms];
@@ -170,6 +171,7 @@ function App() {
                   status: "arrived",
                 };
 
+                // update dashboard
                 setTrains((prev) =>
                   prev.map((t) =>
                     t.trainNumber === train.trainNumber
@@ -185,6 +187,7 @@ function App() {
                 return false;
               }
             } else {
+              // if no platform is free, push the train to waiting list
               updatedWaiting.push(train);
               return false;
             }
@@ -212,6 +215,7 @@ function App() {
           : null;
         if (departureTime && !isNaN(departureTime) && now >= departureTime) {
           updatedPlatforms[index] = null;
+          // update dashboard
           setTrains((prev) =>
             prev.map((t) =>
               t.trainNumber === train.trainNumber

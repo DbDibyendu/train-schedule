@@ -7,11 +7,11 @@ import { downloadCSV } from "./utils.js";
 
 function App() {
   const [platformCount, setPlatformCount] = useState(null);
-  const [platforms, setPlatforms] = useState([]);
-  const [schedule, setSchedule] = useState([]);
-  const [waitingTrains, setWaitingTrains] = useState([]);
+  const [platforms, setPlatforms] = useState([]); // to keep track of platform availibility
+  const [schedule, setSchedule] = useState([]); // keep track of train schedule
+  const [waitingTrains, setWaitingTrains] = useState([]); // keep track of waiting trains
   const [csvError, setCsvError] = useState("");
-  const [trains, setTrains] = useState([]);
+  const [trains, setTrains] = useState([]); // dashboard trains
   const [csvUploaded, setCsvUploaded] = useState(false);
 
   const handlePlatformSubmit = (e) => {
@@ -48,8 +48,14 @@ function App() {
           .filter((train) => train.trainNumber);
 
         trains.sort((a, b) => {
-          if (a.priority !== b.priority)
+          if (a.priority !== b.priority) {
             return a.priority.localeCompare(b.priority);
+          }
+          const timeA = new Date(`1970-01-01T${a.arrival}`);
+          const timeB = new Date(`1970-01-01T${b.arrival}`);
+          if (timeA.getTime() !== timeB.getTime()) {
+            return timeA - timeB;
+          }
           return a.originalOrder - b.originalOrder;
         });
 
@@ -189,7 +195,10 @@ function App() {
       // waiting sort logic
       updatedWaiting.sort((a, b) => {
         if (a.priority !== b.priority)
-          return a.priority.localeCompare(b.priority); // lexicographical order
+          return a.priority.localeCompare(b.priority);
+        const timeA = new Date(`1970-01-01T${a.arrival}`);
+        const timeB = new Date(`1970-01-01T${b.arrival}`);
+        if (timeA.getTime() !== timeB.getTime()) return timeA - timeB;
         return a.originalOrder - b.originalOrder;
       });
 

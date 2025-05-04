@@ -48,14 +48,15 @@ function App() {
           .filter((train) => train.trainNumber);
 
         trains.sort((a, b) => {
-          if (a.priority !== b.priority) {
-            return a.priority.localeCompare(b.priority);
-          }
           const timeA = new Date(`1970-01-01T${a.arrival}`);
           const timeB = new Date(`1970-01-01T${b.arrival}`);
           if (timeA.getTime() !== timeB.getTime()) {
             return timeA - timeB;
           }
+          if (a.priority !== b.priority) {
+            return a.priority.localeCompare(b.priority);
+          }
+
           return a.originalOrder - b.originalOrder;
         });
 
@@ -194,11 +195,13 @@ function App() {
 
       // waiting sort logic
       updatedWaiting.sort((a, b) => {
+        const timeA = new Date(`1970-01-01T${a.actualArrival}`);
+        const timeB = new Date(`1970-01-01T${b.actualArrival}`);
+        if (timeA.getTime() !== timeB.getTime()) return timeA - timeB;
+
         if (a.priority !== b.priority)
           return a.priority.localeCompare(b.priority);
-        const timeA = new Date(`1970-01-01T${a.arrival}`);
-        const timeB = new Date(`1970-01-01T${b.arrival}`);
-        if (timeA.getTime() !== timeB.getTime()) return timeA - timeB;
+
         return a.originalOrder - b.originalOrder;
       });
 
